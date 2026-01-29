@@ -1,0 +1,21 @@
+# Common directories to ignore
+node_modules/
+dist/
+dist-electron/
+build/
+release/
+
+# IDE and OS specific
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Chaditor specific (do not remove)
+.chaditor/
+
+# Git directory (do not remove)
+.git/
+
+# Log files
+*.log
