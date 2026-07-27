@@ -362,6 +362,13 @@ export class MultiPhysicsSolver {
       const n1 = this.nodes[nodeMap.get(element.node1)];
       const n2 = this.nodes[nodeMap.get(element.node2)];
 
+      // Calculate chemical degradation
+      const avgC = (n1.C + n2.C) / 2;
+      if (element.initialBreakStrain !== undefined) {
+          element.breakStrain = Math.max(0.001, element.initialBreakStrain - (element.chemDegradationRate || 0) * avgC);
+
+      }
+
       const dx = n2.x - n1.x;
       const dy = n2.y - n1.y;
       const dz = n2.z - n1.z;
@@ -432,6 +439,7 @@ export function generateFiberMatrixTruss(length, width, height, segmentsX, segme
     let beta = 0.01;
     let yieldStrain = 0.01;
     let breakStrain = 0.05;
+    let chemDegradationRate = 0.0; // Matrix does not chemically degrade
 
     if (dist < fiberRadius) {
       type = 'fiber';
@@ -440,6 +448,7 @@ export function generateFiberMatrixTruss(length, width, height, segmentsX, segme
       beta = 0.001; // less chemical swelling
       yieldStrain = 0.05; // yields much later
       breakStrain = 0.1; // breaks later
+      chemDegradationRate = 10.0; // Fibers degrade heavily with chemical concentration
     }
 
     elements.push({
@@ -451,7 +460,9 @@ export function generateFiberMatrixTruss(length, width, height, segmentsX, segme
       alpha,
       beta,
       yieldStrain,
-      breakStrain
+      breakStrain,
+      initialBreakStrain: breakStrain,
+      chemDegradationRate
     });
   };
 
