@@ -29,52 +29,33 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
 
-import { generateSampleTruss, solveFEM } from './fem.js';
+import { generateFiberMatrixTruss, MultiPhysicsSolver } from './fem.js';
 
-const trussData = generateSampleTruss();
-const solvedNodes = solveFEM(trussData.nodes, trussData.elements);
 
-// Create mesh for original structure (Grey)
-const originalMaterial = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.5 });
-const originalPoints = [];
+const length = 5;
+const width = 1;
+const height = 1;
+const trussData = generateFiberMatrixTruss(length, width, height, 10, 4, 4, 0.4);
 
-// Create mesh for deformed structure (Red)
-const deformedMaterial = new THREE.LineBasicMaterial({ color: 0xff3333 });
-const deformedPoints = [];
+// Make solver globally accessible for the animate loop
+window.solver = new MultiPhysicsSolver(trussData.nodes, trussData.elements);
 
-// Scale factor for displacements to make them visible
-const scaleFactor = 500;
+const numElements = trussData.elements.length;
+const positions = new Float32Array(numElements * 2 * 3);
+const colors = new Float32Array(numElements * 2 * 3);
 
-trussData.elements.forEach(element => {
-  const n1 = solvedNodes.find(n => n.id === element.node1);
-  const n2 = solvedNodes.find(n => n.id === element.node2);
+const geometry = new THREE.BufferGeometry();
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  if (n1 && n2) {
-    // Original structure
-    originalPoints.push(new THREE.Vector3(n1.x, n1.y, n1.z));
-    originalPoints.push(new THREE.Vector3(n2.x, n2.y, n2.z));
+const material = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 });
+const lines = new THREE.LineSegments(geometry, material);
+scene.add(lines);
 
-    // Deformed structure
-    deformedPoints.push(new THREE.Vector3(
-      n1.x + (n1.dx || 0) * scaleFactor,
-      n1.y + (n1.dy || 0) * scaleFactor,
-      n1.z + (n1.dz || 0) * scaleFactor
-    ));
-    deformedPoints.push(new THREE.Vector3(
-      n2.x + (n2.dx || 0) * scaleFactor,
-      n2.y + (n2.dy || 0) * scaleFactor,
-      n2.z + (n2.dz || 0) * scaleFactor
-    ));
-  }
-});
+// Keep reference to geometry to update it
+window.trussGeometry = geometry;
+window.scaleFactor = 100; // MultiPhysics solver uses smaller displacements
 
-const originalGeometry = new THREE.BufferGeometry().setFromPoints(originalPoints);
-const originalLines = new THREE.LineSegments(originalGeometry, originalMaterial);
-scene.add(originalLines);
-
-const deformedGeometry = new THREE.BufferGeometry().setFromPoints(deformedPoints);
-const deformedLines = new THREE.LineSegments(deformedGeometry, deformedMaterial);
-scene.add(deformedLines);
 
 // Center camera on the structure
 camera.position.set(2.5, 2, 8);
@@ -93,6 +74,67 @@ window.addEventListener('resize', () => {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+
+  if (window.solver && window.trussGeometry) {
+    // Advance simulation
+    window.solver.step(0.01);
+
+    const positions = window.trussGeometry.attributes.position.array;
+    const colors = window.trussGeometry.attributes.color.array;
+    const elements = window.solver.elements;
+    const nodes = window.solver.nodes;
+
+    // Quick node lookup
+    const nodeMap = new Map();
+    nodes.forEach(n => nodeMap.set(n.id, n));
+
+    let posIdx = 0;
+    let colIdx = 0;
+
+    elements.forEach(element => {
+      const n1 = nodeMap.get(element.node1);
+      const n2 = nodeMap.get(element.node2);
+
+      if (n1 && n2) {
+        // Position
+        positions[posIdx++] = n1.x + (n1.dx || 0) * window.scaleFactor;
+        positions[posIdx++] = n1.y + (n1.dy || 0) * window.scaleFactor;
+        positions[posIdx++] = n1.z + (n1.dz || 0) * window.scaleFactor;
+
+        positions[posIdx++] = n2.x + (n2.dx || 0) * window.scaleFactor;
+        positions[posIdx++] = n2.y + (n2.dy || 0) * window.scaleFactor;
+        positions[posIdx++] = n2.z + (n2.dz || 0) * window.scaleFactor;
+
+        // Color based on type and state
+        let r = 0, g = 0, b = 0;
+
+        if (element.state === 'broken') {
+          // Red for broken
+          r = 1; g = 0; b = 0;
+        } else if (element.state === 'plastic') {
+          // Yellow for yielded/plastic
+          r = 1; g = 1; b = 0;
+        } else {
+          // Elastic state
+          if (element.type === 'fiber') {
+            // Blue for fiber
+            r = 0; g = 0.5; b = 1;
+          } else {
+            // Grey for matrix
+            r = 0.5; g = 0.5; b = 0.5;
+          }
+        }
+
+        // Apply color to both vertices of the line segment
+        colors[colIdx++] = r; colors[colIdx++] = g; colors[colIdx++] = b;
+        colors[colIdx++] = r; colors[colIdx++] = g; colors[colIdx++] = b;
+      }
+    });
+
+    window.trussGeometry.attributes.position.needsUpdate = true;
+    window.trussGeometry.attributes.color.needsUpdate = true;
+  }
+
   renderer.render(scene, camera);
 }
 

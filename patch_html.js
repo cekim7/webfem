@@ -1,17 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FEM Visualization</title>
-    <style>
-      body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
-      #app { width: 100vw; height: 100vh; }
-    </style>
-  </head>
-  <body>
+const fs = require('fs');
+let content = fs.readFileSync('index.html', 'utf8');
 
+const legendHtml = `
     <div id="legend" style="position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; font-family: sans-serif; border-radius: 5px;">
       <h3 style="margin: 0 0 10px 0; font-size: 14px;">MultiPhysics Structure</h3>
       <div style="display: flex; align-items: center; margin-bottom: 5px;">
@@ -31,7 +21,7 @@
         <span>Broken</span>
       </div>
     </div>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
-</html>
+    <div id="app"></div>`;
+
+content = content.replace('<div id="app"></div>', legendHtml);
+fs.writeFileSync('index.html', content, 'utf8');
